@@ -45,7 +45,7 @@ import math
 
 Here we load a small `.npz` dataset prepared for demonstrating the training pipeline.  
 - This example dataset is included in the GitHub repository.  
-- For full-scale training, please download the larger dataset from [CMU KiltHub](link-to-dataset).  
+- For full-scale training, please download the larger dataset from [CMU KiltHub](under construction).  
 
 Users have two options for Colab:
 1. Download directly from GitHub.  
@@ -61,7 +61,7 @@ drive.mount('/content/drive')
 
 # Option 1: Download example dataset directly from GitHub
 # (uncomment and update URL to the raw .npz file)
-# !wget -O example_dataset.npz "https://github.com/your-repo/path/to/example_dataset.npz"
+# !wget -O example_dataset.npz "https://github.com/jingyiwu-biophotonics/LSTM-Pulsation-Tracing/main/training/data/example_dataset_for_training.npz"
 
 # Option 2: Load from your own Google Drive.
 # Assume the file is already in your Google Drive.
