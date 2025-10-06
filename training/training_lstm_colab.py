@@ -61,11 +61,11 @@ drive.mount('/content/drive')
 
 # Option 1: Download example dataset directly from GitHub
 # (uncomment and update URL to the raw .npz file)
-# !wget -O example_dataset.npz "https://github.com/jingyiwu-biophotonics/LSTM-Pulsation-Tracing/main/training/data/example_dataset_for_training.npz"
+# !wget -O example_dataset.npz "https://github.com/jingyiwu-biophotonics/LSTM-Pulsation-Tracing/raw/refs/heads/main/training/data/example_dataset_for_training.npz"
 
-# Option 2: Load from your own Google Drive.
-# Assume the file is already in your Google Drive.
-data_path = '/content/drive/MyDrive/Colab Notebooks/LSTM-pulse-tracing/data_synthetic/example_dataset_for_training.npz'
+# Option 2: Save then Load from your own Google Drive.
+# Assume the file is already in your Google Drive with the path:
+data_path = '/content/drive/MyDrive/Colab Notebooks/LSTM-Pulse-Tracing/training_data/example_dataset_for_training.npz'
 data_dict = np.load(data_path)
 dataset = data_dict['data']
 print(dataset.shape) # should be (750, 3000, 2)
