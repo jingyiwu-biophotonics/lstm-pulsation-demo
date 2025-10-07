@@ -14,7 +14,7 @@ We generate physiologically realistic pulsatile signals, corrupt them with param
   <img src="figures/pipeline.png" width="850">
 </p>
 
----
+
 
 ## Example: Pulsation Tracing in Noisy NIRS Signal
 
