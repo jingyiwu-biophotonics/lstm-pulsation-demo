@@ -131,14 +131,6 @@ Pre‑trained weights are placed in `testing/models/`:
 See `testing/models/README.md` for details and checksums.
 
 
-
-## Licensing
-
-- **Code (Python & MATLAB):** [MIT License](LICENSE)  
-- **Data (synthetic & experimental):** [CC BY‑NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/)
-
-> If you plan to reuse or redistribute the datasets, please retain the original attribution and license notices.
-
 ## Licensing
 
 This repository contains components under **three different licenses**:
