@@ -36,6 +36,8 @@ function dxdt = odenirs_2SN(t,x,flag,rr,sfint,ai,location,scale_hr,shape,f_resp,
     %   dxdt     : time derivative [dx1/dt; dx2/dt; dx3/dt]
     %
     % Author: Jingyi Wu, 2025
+
+    % SPDX-License-Identifier: GPL-3.0-or-later
     
     % Parameters for the limit cycle
     ta = atan2(x(2),x(1)); % phase angle

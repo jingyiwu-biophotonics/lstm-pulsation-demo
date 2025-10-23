@@ -21,6 +21,7 @@ This folder contains MATLAB scripts and functions for generating synthetic data 
 ### `generate_pulses/`
 - Functions for generating **clean synthetic signals** based on skewed normal waveforms.
 - Implements different pulse morphologies (e.g., single peak, closer/further double peaks).
+- **Note:** Routines here are adapted from ECGSYN and are therefore licensed under GNU GPL v3.0 (see Licensing below).
 
 ### `utils/`
 - Helper functions for filtering, signal processing, and visualization:
@@ -55,6 +56,21 @@ This folder contains MATLAB scripts and functions for generating synthetic data 
 - The example data in `data/` is small and lightweight for demonstration.
 - For full-scale training, run `generate_training_data.m` to create large datasets (several GBs).
 - Pulse morphology generation is adapted from [ECGSYN](https://physionet.org/content/ecgsyn/1.0.0/).
+
+---
+
+## Licensing
+This folder contains components under three different licenses:
+1. **GNU General Public License v3.0 (GPL-3.0)**
+    - The following files/functions in the `generate_pulses/` folder were derived from or adapted based on ECGSYN, and are licensed under GPL-3.0:
+      - `generate_signal.m`
+      - `odenirs_2SN.m`
+      - `rrprocess.m`
+2. **MIT License**
+    - Applies to all other original code in this repository.
+3. **Creative Commons Attribution (CC BY 4.0)**
+    - Applies to all example data provided in the `data/` folder.
+
 
 ---
 

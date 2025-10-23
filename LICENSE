@@ -1,5 +1,5 @@
-MIT License (for Code)
-======================
+MIT License (for Original Code)
+===============================
 
 Copyright (c) 2025 Jingyi Wu
 
@@ -22,21 +22,46 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 
-Creative Commons Attribution-NonCommercial 4.0 International (for Data)
-=======================================================================
+GNU General Public License v3.0 (for ECGSYN-Derived Code)
+=========================================================
+
+Some files in the `generate_pulses/` folder are derived from or adapted from
+the ECGSYN model, which is distributed under the GNU General Public License
+version 3 (GPL-3.0).
+
+These files are licensed under the same terms:
+GNU General Public License v3.0 or later (GPL-3.0-or-later).
+
+You may copy, distribute, and modify these files as long as you:
+- Include a copy of the GPL-3.0 license text,
+- Provide clear attribution to the original ECGSYN authors, and
+- Distribute any derivative works under the same GPL-3.0 (or later) license.
+
+SPDX identifier for these files:
+    SPDX-License-Identifier: GPL-3.0-or-later
+
+Full License Text:
+https://www.gnu.org/licenses/gpl-3.0.html
+
+
+Creative Commons Attribution 4.0 International (for Data)
+=========================================================
+
+Data files in the `data/` folder are provided under the
+Creative Commons Attribution 4.0 International License (CC BY 4.0).
 
 You are free to:
-- Share — copy and redistribute the material in any medium or format
-- Adapt — remix, transform, and build upon the material
+- **Share** — copy and redistribute the material in any medium or format
+- **Adapt** — remix, transform, and build upon the material for any purpose,
+  even commercially.
 
 Under the following terms:
-- Attribution — You must give appropriate credit, provide a link to the license,
-  and indicate if changes were made. You may do so in any reasonable manner,
-  but not in any way that suggests the licensor endorses you or your use.
-- NonCommercial — You may not use the material for commercial purposes.
+- **Attribution** — You must give appropriate credit, provide a link to the
+  license, and indicate if changes were made. You may do so in any reasonable
+  manner, but not in any way that suggests the licensor endorses you or your use.
 
 No additional restrictions — You may not apply legal terms or technological
 measures that legally restrict others from doing anything the license permits.
 
 Full License Text:
-https://creativecommons.org/licenses/by-nc/4.0/
+https://creativecommons.org/licenses/by/4.0/

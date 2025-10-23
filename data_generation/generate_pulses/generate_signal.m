@@ -32,6 +32,8 @@ function [t_seg, s_seg] = generate_signal(pulse_type, fs, plt_fig)
     % Example:
     % [t_seg, s_seg] = generate_signal(1, 50, 1);
 
+    % SPDX-License-Identifier: GPL-3.0-or-later
+
     %% Pulse-shape parameter presets (skewed normal) for each pulse type
     % l*   = location; a* = amplitude scale; scal* = scale; sp* = shape
     % *_exp = expected center value, *_rg = uniform jitter range

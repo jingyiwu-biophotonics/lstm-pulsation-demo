@@ -1,6 +1,7 @@
 function x = rrprocess(flo, fhi, flostd, fhistd, lfhfratio, sfrr, n)
     % This function computes the rr process.
     % From ECGSYN: https://physionet.org/content/ecgsyn/1.0.0/
+    % SPDX-License-Identifier: GPL-3.0-or-later
     w1 = 2*pi*flo;
     w2 = 2*pi*fhi;
     c1 = 2*pi*flostd;

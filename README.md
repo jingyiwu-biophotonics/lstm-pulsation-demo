@@ -139,6 +139,22 @@ See `testing/models/README.md` for details and checksums.
 
 > If you plan to reuse or redistribute the datasets, please retain the original attribution and license notices.
 
+## Licensing
+
+This repository contains components under **three different licenses**:
+
+- **Original Code (Python & MATLAB):** [MIT License](LICENSE)  
+  Applies to all original code developed for this project, except files derived from ECGSYN.
+
+- **ECGSYN-Derived Code:** [GNU General Public License v3.0 (GPL-3.0)](https://www.gnu.org/licenses/gpl-3.0.html)  
+  Applies to files in `generate_pulses/` that are derived from or adapted from [ECGSYN](https://physionet.org/content/ecgsyn/1.0.0/).
+
+- **Data (synthetic & experimental):** [Creative Commons Attribution 4.0 International (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/)  
+  Applies to synthetic and experimental datasets provided in the `data_generation/`, `testing/`, and `training/` folders.
+
+> If you plan to reuse or redistribute code or data, please retain the original attribution and license notices.
+
+
 ---
 
 ## Citation
