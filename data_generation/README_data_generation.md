@@ -2,7 +2,6 @@
 
 This folder contains MATLAB scripts and functions for generating synthetic data that was used in training the LSTM-based pulsation tracing model. The scripts allow users to generate clean pulse signals, add realistic artifacts and noise, and prepare datasets for model training.
 
----
 
 ## Folder Structure
 
@@ -29,7 +28,6 @@ This folder contains MATLAB scripts and functions for generating synthetic data 
   - Butterworth filters
   - Custom plotting functions
 
----
 
 ## Key Scripts
 
@@ -49,7 +47,6 @@ This folder contains MATLAB scripts and functions for generating synthetic data 
 - Demonstrates specific artifact types (e.g., modulation, drift, spikes).
 - Plots clean vs. artifact-distorted signals for clear comparison.
 
----
 
 ## Notes
 
@@ -57,7 +54,6 @@ This folder contains MATLAB scripts and functions for generating synthetic data 
 - For full-scale training, run `generate_training_data.m` to create large datasets (several GBs).
 - Pulse morphology generation is adapted from [ECGSYN](https://physionet.org/content/ecgsyn/1.0.0/).
 
----
 
 ## Licensing
 This folder contains components under three different licenses:
@@ -71,8 +67,6 @@ This folder contains components under three different licenses:
 3. **Creative Commons Attribution (CC BY 4.0)**
     - Applies to all example data provided in the `data/` folder.
 
-
----
 
 ## Contact
 Jingyi Wu — jingyiwu@andrew.cmu.edu
