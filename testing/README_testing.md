@@ -3,7 +3,6 @@
 Scripts and notebooks for **evaluating trained LSTM models** on experimental and synthetic datasets.  
 This folder demonstrates how to load models, run inference, compare with classical signal processing baselines, and visualize results.
 
----
 
 ## Folder Layout
 
@@ -25,7 +24,6 @@ testing/
 └── requirements_test.txt               # Python dependencies for testing
 ```
 
----
 
 ## What Each Notebook Does
 
@@ -35,7 +33,6 @@ testing/
 - **`benchmark_LSTM_with_DWT_and_TDDR.ipynb`** — Baseline comparison on synthetic data with ground truth (DWT, TDDR vs. LSTM).  
 - **`ablation_study_compare_LSTM_models.ipynb`** — Ablation analyses (reduced dataset, no colored noise models) on synthetic data.
 
----
 
 ## Typical Workflow
 
@@ -64,7 +61,6 @@ testing/
 6. **Analyze & visualize**  
    Time‑trace overlays, spectrograms, low‑SNR region highlighting, pulse segmentation/averaging, and HR/IBI metrics (where applicable).
 
----
 
 ## Running the Script Demo
 
@@ -88,7 +84,6 @@ jupyter notebook testing_pulsation_tracing.ipynb
 ```
 Or open any of the other notebooks for the specific analyses listed above.
 
----
 
 ## Installation
 
@@ -99,8 +94,6 @@ pip install -r requirements_test.txt
 ```
 
 
----
-
 ## Notes
 
 - The testing notebooks rely on helper utilities in `testing/utils/` (imported as `from utils import ...`).  
@@ -108,7 +101,6 @@ pip install -r requirements_test.txt
 - Synthetic datasets (with ground truth) are documented in `testing/synthetic_data/README_synthetic_data.md`.  
 - If you use your own data, ensure **sampling rate = 50 Hz** or resample accordingly, and scale pulses to ~[−1, 1] for best results.
 
----
 
 ## Contact
 
