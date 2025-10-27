@@ -2,7 +2,6 @@
 
 This folder contains experimental datasets used to evaluate the performance of the LSTM framework for pulsation tracing and motion artifact removal. These datasets were collected using multiple devices across NIRS, PPG, and DCS modalities, and were employed in different validation tasks in the paper.
 
----
 
 ## Datasets
 
@@ -37,14 +36,11 @@ This folder contains experimental datasets used to evaluate the performance of t
   - Used to demonstrate **pulse shape tracing, segmentation, and averaging**.
   
 
----
-
 ## Notes
 - Full DCS dataset can be found in [DOI: 10.1117/1.NPh.11.1.015003](https://doi.org/10.1117/1.NPh.11.1.015003).
 - All datasets should be preprocessed and aligned for compatibility with the LSTM inference pipeline. See testing scripts for more details.  
 - These datasets were selected to cover a **diverse range of noise/artifact conditions** and **different optical modalities**, showcasing the flexibility of the proposed framework. 
 
----
 
 ## Contact
 Jingyi Wu — jingyiwu@andrew.cmu.edu
