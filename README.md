@@ -7,7 +7,7 @@ This repository accompanies the paper:
 *Authors: Jingyi Wu\*, Shaojie Bai\*, Zeynep Ozkaya, Justin A. Patel, Emily Skog, Alexander Ruesch, Matthew A. Smith, and Jana M. Kainerstorfer  
 \*These authors contributed equally.*
 
-*Biomedical Optics Express* (2025). [https://doi.org/10.1364/BOE.574286](https://doi.org/10.1364/BOE.574286)
+*Biomedical Optics Express*, 2025. [https://doi.org/10.1364/BOE.574286](https://doi.org/10.1364/BOE.574286)
 
 We generate physiologically realistic pulsatile signals, corrupt them with parameterized artifacts, and train a bidirectional LSTM to **trace and denoise cardiac pulsations** without annotated clinical datasets. The framework supports downstream analyses such as **heart‑rate (HR) estimation**, **pulse segmentation**, and **waveform averaging**, and is designed to be easily extended to new devices and noise conditions.
 
