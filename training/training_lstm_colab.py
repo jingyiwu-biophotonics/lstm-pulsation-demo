@@ -45,7 +45,7 @@ import math
 
 Here we load a small `.npz` dataset prepared for demonstrating the training pipeline.  
 - This example dataset is included in the GitHub repository.  
-- For full-scale training, please download the larger dataset from [CMU KiltHub](under construction).  
+- For full-scale training, please download the larger dataset from [CMU KiltHub](https://doi.org/10.1184/R1/30090361).  
 
 Users have two options for Colab:
 1. Download directly from GitHub.  
@@ -413,7 +413,7 @@ for i in range(max_epochs):
         torch.save(model.state_dict(), "best_model_tmp.pt")
 
         # To save it to a specific folder:
-        # torch.save(model.state_dict(), "/content/drive/MyDrive/Colab Notebooks/LSTM-pulse-tracing/model/best_model_tmp.pt")
+        # torch.save(model.state_dict(), "/content/drive/MyDrive/Colab Notebooks/lstm-pulsation-tracing/model/best_model_tmp.pt")
 
         best_val = val_loss
         visualize_test(model)
@@ -425,7 +425,7 @@ for i in range(max_epochs):
 local_model_path = "best_model_tmp.pt"
 
 # Path in your Google Drive where you want to save the best model
-drive_model_path = "/content/drive/MyDrive/Colab Notebooks/LSTM-pulse-tracing/model/"
+drive_model_path = "/content/drive/MyDrive/Colab Notebooks/lstm-pulsation-tracing/model/"
 
 # # Create the directory in Google Drive if it doesn't exist
 !mkdir -p "{drive_model_path}"
