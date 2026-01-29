@@ -248,8 +248,8 @@ def create_signal_plot(results):
     # Create subplot figure with 3 rows: raw input, signal comparison, SNR
     fig = make_subplots(
         rows=3, cols=1,
-        shared_xaxes=False,
-        vertical_spacing=0.08,
+        shared_xaxes=True,
+        vertical_spacing=0.12,
         row_heights=[0.25, 0.5, 0.25],
         subplot_titles=["Raw Input Signal", "Signal Comparison (after preprocessing)", "Signal-to-Noise Ratio (SNR)"]
     )
@@ -271,7 +271,7 @@ def create_signal_plot(results):
         go.Scatter(
             x=t, y=noisy,
             mode='lines',
-            name='Original (Noisy)',
+            name='Preprocessed',
             line=dict(color=COLOR_NOISY, width=1),
         ),
         row=2, col=1
@@ -311,20 +311,21 @@ def create_signal_plot(results):
 
     # Update layout
     fig.update_layout(
-        height=650,
+        height=700,
         showlegend=True,
         legend=dict(
             orientation="h",
-            yanchor="bottom",
-            y=1.02,
+            yanchor="top",
+            y=1.12,
             xanchor="center",
             x=0.5
         ),
-        margin=dict(l=60, r=20, t=80, b=40),
+        margin=dict(l=60, r=20, t=100, b=40),
     )
 
-    fig.update_xaxes(title_text="Time (s)", row=1, col=1)
-    fig.update_xaxes(title_text="Time (s)", row=2, col=1)
+    # Only show x-axis label on the bottom subplot
+    fig.update_xaxes(title_text="", row=1, col=1)
+    fig.update_xaxes(title_text="", row=2, col=1)
     fig.update_xaxes(title_text="Time (s)", row=3, col=1)
     fig.update_yaxes(title_text="Intensity (a.u.)", row=1, col=1)
     fig.update_yaxes(title_text="Amplitude (a.u.)", row=2, col=1)
@@ -348,14 +349,14 @@ def create_pulse_plot(results):
         horizontal_spacing=0.12
     )
 
-    # Left plot: Signal with boundaries
+    # Left plot: Signal with boundaries (legend only here)
     fig.add_trace(
         go.Scatter(
             x=t, y=noisy,
             mode='lines',
-            name='Original (Noisy)',
+            name='Noisy',
             line=dict(color=COLOR_NOISY, width=1),
-            legendgroup='left',
+            showlegend=True,
         ),
         row=1, col=1
     )
@@ -366,7 +367,7 @@ def create_pulse_plot(results):
             mode='lines',
             name='LSTM Cleaned',
             line=dict(color=COLOR_CLEAN, width=1.2),
-            legendgroup='left',
+            showlegend=True,
         ),
         row=1, col=1
     )
@@ -391,7 +392,7 @@ def create_pulse_plot(results):
             row=1, col=1
         )
 
-    # Right plot: Averaged pulse waveform
+    # Right plot: Averaged pulse waveform (no legend)
     x_pulse = results['x_pulse']
     mean_noisy = results['mean_pulse_noisy']
     std_noisy = results['std_pulse_noisy']
@@ -403,9 +404,9 @@ def create_pulse_plot(results):
         go.Scatter(
             x=x_pulse, y=mean_noisy,
             mode='lines',
-            name='Original Pulse',
+            name='Noisy Pulse',
             line=dict(color=COLOR_NOISY, width=2),
-            legendgroup='right',
+            showlegend=False,
         ),
         row=1, col=2
     )
@@ -430,7 +431,7 @@ def create_pulse_plot(results):
             mode='lines',
             name='LSTM Pulse',
             line=dict(color=COLOR_CLEAN, width=2),
-            legendgroup='right',
+            showlegend=False,
         ),
         row=1, col=2
     )
@@ -454,7 +455,10 @@ def create_pulse_plot(results):
     fig.add_vline(x=results['ttp_lstm'], row=1, col=2, line_dash="dash",
                   line_color=COLOR_CLEAN, line_width=1)
 
-    # Update layout with separate legends for each subplot
+    # Set x-axis limit for first subplot to show zoomed-in view (first 10 seconds or available)
+    t_max_zoom = min(10.0, t[-1])
+
+    # Update layout
     fig.update_layout(
         height=400,
         showlegend=True,
@@ -462,20 +466,29 @@ def create_pulse_plot(results):
             orientation="h",
             yanchor="bottom",
             y=1.08,
-            xanchor="center",
-            x=0.5,
+            xanchor="left",
+            x=0.0,
             font=dict(size=10),
         ),
         margin=dict(l=60, r=20, t=80, b=40),
     )
 
-    fig.update_xaxes(title_text="Time (s)", row=1, col=1)
+    fig.update_xaxes(title_text="Time (s)", range=[0, t_max_zoom], row=1, col=1)
     fig.update_xaxes(title_text="Time (s)", row=1, col=2)
     fig.update_yaxes(title_text="Amplitude (a.u.)", row=1, col=1)
     fig.update_yaxes(title_text="Amplitude (a.u.)", row=1, col=2)
     fig.update_yaxes(range=[y_min, y_max], row=1, col=1)
 
     return fig
+
+
+def reset_session_state():
+    """Reset all session state variables."""
+    st.session_state.results = None
+    st.session_state.signal_name = None
+    st.session_state.signal = None
+    st.session_state.fs = None
+    st.session_state.is_example_data = False
 
 
 # --- Streamlit App ---
@@ -535,6 +548,8 @@ def main():
         st.session_state.signal = None
     if 'fs' not in st.session_state:
         st.session_state.fs = None
+    if 'is_example_data' not in st.session_state:
+        st.session_state.is_example_data = False
 
     # Sidebar - Input Section
     with st.sidebar:
@@ -575,9 +590,9 @@ def main():
         # Delta OD conversion option
         st.subheader("Signal Type")
         convert_dod = st.checkbox(
-            "Convert to Delta OD",
+            "Convert to ΔOD",
             value=True,
-            help="Convert raw intensity signal to change in optical density: ΔOD = -ln(I/I₀). Enable for raw intensity signals (NIRS, DCS). Disable if your signal is already in ΔOD or other units."
+            help="Convert raw intensity signal to change in optical density: ΔOD = -ln(I/I₀). Enable for raw intensity signals. Disable if your signal is already a \"PPG-like\" signal."
         )
 
         st.divider()
@@ -589,7 +604,7 @@ def main():
 
             These parameters control how the signal is normalized before LSTM processing.
             The goal is to scale the signal so the **averaged pulse** ranges roughly from **-1 to 1**.
-            If your results look off, adjust these values and check the averaged pulse plot.
+            If your averaged noisy and LSTM pulses don't align well or aren't between -1 and 1, adjust these values and check the averaged pulse plot.
             """)
 
             amplitude_scale = st.slider(
@@ -626,6 +641,9 @@ def main():
         # Process button
         process_btn = st.button("Process Signal", type="primary", use_container_width=True)
 
+        # Start Over button
+        start_over_btn = st.button("Start Over", use_container_width=True)
+
         st.divider()
 
         # How to Use section
@@ -634,7 +652,7 @@ def main():
             **Quick Start:**
             1. Click an example dataset button OR upload your own file
             2. Set the sampling frequency for uploaded files
-            3. Choose whether to convert to Delta OD
+            3. Choose whether to convert to ΔOD
             4. Click "Process Signal"
             5. View results and download outputs
 
@@ -645,7 +663,7 @@ def main():
 
             **Tips:**
             - Signal should be a 1D time trace
-            - Enable "Convert to Delta OD" for raw intensity signals
+            - Enable "Convert to ΔOD" for raw intensity signals
             - Use zoom/pan tools on plots to explore data
             - Check the averaged pulse ranges from -1 to 1
 
@@ -653,6 +671,11 @@ def main():
             - **Pearson r**: Correlation between original and cleaned average pulse
             - **ΔTTP**: Time-to-peak difference in milliseconds
             """)
+
+    # Handle Start Over button
+    if start_over_btn:
+        reset_session_state()
+        st.rerun()
 
     # Handle example dataset buttons
     if use_fiber_shaking:
@@ -664,6 +687,7 @@ def main():
         st.session_state.fs = fs
         st.session_state.signal_name = "nirs_fiber_shaking"
         st.session_state.results = None
+        st.session_state.is_example_data = True
         st.rerun()
 
     if use_head_shaking:
@@ -675,6 +699,7 @@ def main():
         st.session_state.fs = fs
         st.session_state.signal_name = "nirs_head_shaking"
         st.session_state.results = None
+        st.session_state.is_example_data = True
         st.rerun()
 
     # Handle file upload
@@ -696,21 +721,8 @@ def main():
             st.session_state.signal = signal
             st.session_state.signal_name = uploaded_file.name.rsplit('.', 1)[0]
             st.session_state.results = None
-            # Don't set fs here - user must input it manually
-
-    # Data loaded indicator
-    if st.session_state.signal is not None:
-        with st.sidebar:
-            st.markdown(
-                f'<div class="data-loaded">Data loaded: <strong>{st.session_state.signal_name}</strong><br>'
-                f'Length: {len(st.session_state.signal):,} samples</div>',
-                unsafe_allow_html=True
-            )
-            if st.session_state.fs is not None:
-                st.markdown(
-                    f'<div class="data-loaded">Sampling rate: <strong>{st.session_state.fs:.1f} Hz</strong></div>',
-                    unsafe_allow_html=True
-                )
+            st.session_state.fs = None  # Reset fs - user must input manually
+            st.session_state.is_example_data = False
 
     # Process signal
     if process_btn:
@@ -718,7 +730,7 @@ def main():
             st.error("Please load a dataset first (example or upload).")
         else:
             # Determine sampling frequency
-            if st.session_state.fs is not None:
+            if st.session_state.is_example_data and st.session_state.fs is not None:
                 # Example dataset - use stored fs
                 fs_to_use = st.session_state.fs
             elif fs_input is not None:
@@ -726,7 +738,7 @@ def main():
                 fs_to_use = fs_input
                 st.session_state.fs = fs_input
             else:
-                # No fs specified
+                # No fs specified for uploaded data
                 st.error("Please enter the sampling frequency for your uploaded data.")
                 fs_to_use = None
 
@@ -743,7 +755,6 @@ def main():
                             convert_dod=convert_dod,
                         )
                         st.session_state.results = results
-                        st.success("Processing complete!")
                     except Exception as e:
                         st.error(f"Error processing signal: {e}")
                         st.session_state.results = None
@@ -751,6 +762,14 @@ def main():
     # Display results
     if st.session_state.results is not None:
         results = st.session_state.results
+
+        # Data loaded indicator and success message in main area
+        st.markdown(
+            f'<div class="data-loaded">Processing complete! Data: <strong>{st.session_state.signal_name}</strong> | '
+            f'Samples: {len(st.session_state.signal):,} | '
+            f'Sampling rate: {st.session_state.fs:.1f} Hz</div>',
+            unsafe_allow_html=True
+        )
 
         # Metrics display
         st.subheader("Results")
@@ -900,7 +919,7 @@ def main():
             ### Processing Pipeline
 
             1. **Preprocessing**
-               - Optionally convert intensity to delta optical density (dOD)
+               - Optionally convert intensity to delta optical density (ΔOD)
                - Resample to 50 Hz (training frequency)
                - High-pass filter and normalize to [-1, 1]
 
