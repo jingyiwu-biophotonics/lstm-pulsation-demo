@@ -1,0 +1,22 @@
+# LSTM Pulsation Tracing - Dependencies
+# Install with: pip install -r requirements.txt
+
+# Core framework
+streamlit>=1.28.0
+
+# Deep learning
+torch>=2.0.0
+
+# Scientific computing
+numpy>=1.24.0
+scipy>=1.10.0
+pandas>=2.0.0
+
+# Signal processing
+PyWavelets>=1.4.0
+
+# Visualization
+plotly>=5.18.0
+
+# For loading MATLAB files
+h5py>=3.8.0
