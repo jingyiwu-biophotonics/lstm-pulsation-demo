@@ -36,12 +36,13 @@ MODEL_PATH = "models/lstm_full_dataset.pt"
 EXAMPLE_DATA_DIR = "data"
 FS_TARGET = 50.0  # Target sampling frequency (Hz) - matches training data
 WINDOW_SIZE = 3000  # Window size for segmentation (1 min at 50 Hz)
-OVERLAP_SIZE = 2000  # Overlap between windows
+DEFAULT_OVERLAP_SIZE = 2000  # Default overlap between windows
 
 # Color scheme
 COLOR_NOISY = "#ffaa1c"  # Orange/yellow for noisy signal
 COLOR_CLEAN = "#405FC1"  # Blue for cleaned signal
 COLOR_SNR = "#9E3AB7"    # Purple for SNR
+COLOR_RAW = "#2ca02c"    # Green for raw input signal
 
 
 @st.cache_resource
@@ -58,29 +59,15 @@ def load_model():
 def load_mat_file(file_content, filename):
     """Load signal data from a .mat file."""
     try:
-        # Save to temporary buffer and load
         data = loadmat(io.BytesIO(file_content))
-
-        # Try common field names for signal
         signal = None
-        fs = None
 
         for key in ['signal', 'Signal', 'data', 'Data', 'y', 'x']:
             if key in data:
                 signal = np.array(data[key]).flatten()
                 break
 
-        for key in ['fs', 'Fs', 'sampling_rate', 'sr', 'frequency']:
-            if key in data:
-                fs_val = data[key]
-                if hasattr(fs_val, '__iter__'):
-                    fs = float(np.array(fs_val).flatten()[0])
-                else:
-                    fs = float(fs_val)
-                break
-
         if signal is None:
-            # Get first non-metadata array
             for key in data.keys():
                 if not key.startswith('__'):
                     val = np.array(data[key])
@@ -88,17 +75,16 @@ def load_mat_file(file_content, filename):
                         signal = val.flatten()
                         break
 
-        return signal, fs
+        return signal
     except Exception as e:
         st.error(f"Error loading .mat file: {e}")
-        return None, None
+        return None
 
 
 def load_csv_file(file_content):
     """Load signal data from a .csv file."""
     try:
         df = pd.read_csv(io.BytesIO(file_content))
-        # Assume first column is signal or look for 'signal' column
         if 'signal' in df.columns:
             signal = df['signal'].values
         elif 'Signal' in df.columns:
@@ -141,7 +127,8 @@ def calculate_snr_windowed(noisy_signal, clean_signal, window_size=50, step_size
     return np.array(snr_values)
 
 
-def process_signal(model, device, raw_signal, fs_data, amplitude_scale=0.95, offset=0.1):
+def process_signal(model, device, raw_signal, fs_data, amplitude_scale=0.95, offset=0.1,
+                   overlap_size=DEFAULT_OVERLAP_SIZE, convert_dod=True):
     """
     Full processing pipeline: preprocess -> LSTM inference -> pulse detection.
     """
@@ -151,8 +138,14 @@ def process_signal(model, device, raw_signal, fs_data, amplitude_scale=0.95, off
     elif raw_signal.shape[0] != 1:
         raw_signal = raw_signal.T
 
-    # Convert to dOD
-    time_trace_raw = convert_to_dod(raw_signal)
+    # Store raw signal for visualization (before any preprocessing)
+    raw_signal_original = raw_signal.copy()
+
+    # Optionally convert to dOD
+    if convert_dod:
+        time_trace_raw = convert_to_dod(raw_signal)
+    else:
+        time_trace_raw = raw_signal.copy()
 
     # Preprocess: resample to 50 Hz, high-pass filter, normalize
     t_target, time_trace, signal_scale = preprocess_signal(
@@ -160,15 +153,18 @@ def process_signal(model, device, raw_signal, fs_data, amplitude_scale=0.95, off
         amplitude_scale=amplitude_scale, offset=offset, plt_fig=False
     )
 
+    # Create time axis for raw signal
+    t_raw = np.arange(raw_signal_original.shape[1]) / fs_data
+
     # Segment the trace into overlapping windows
-    segments = segment_time_trace(time_trace, WINDOW_SIZE, OVERLAP_SIZE)
+    segments = segment_time_trace(time_trace, WINDOW_SIZE, overlap_size)
 
     # Run LSTM inference on each segment
     processed_segments = process_segments_with_lstm(model, segments, device)
 
     # Combine processed segments
     processed_time_trace = combine_processed_segments(
-        processed_segments, WINDOW_SIZE, OVERLAP_SIZE, time_trace.shape[1]
+        processed_segments, WINDOW_SIZE, overlap_size, time_trace.shape[1]
     )
 
     # Find pulse valleys on processed trace
@@ -214,6 +210,8 @@ def process_signal(model, device, raw_signal, fs_data, amplitude_scale=0.95, off
 
     return {
         't': t_target,
+        't_raw': t_raw,
+        'raw_input': raw_signal_original.squeeze(),
         'noisy': time_trace.squeeze(),
         'processed': processed_time_trace.squeeze(),
         'valleys': valleys,
@@ -228,12 +226,15 @@ def process_signal(model, device, raw_signal, fs_data, amplitude_scale=0.95, off
         'delta_ttp': delta_ttp,
         'snr_values': snr_values,
         'fs': FS_TARGET,
+        'fs_original': fs_data,
     }
 
 
-def create_signal_plot(results, time_range=None):
-    """Create the main signal comparison plot with SNR panel."""
+def create_signal_plot(results):
+    """Create the main signal comparison plot with raw input, processed signals, and SNR panel."""
     t = results['t']
+    t_raw = results['t_raw']
+    raw_input = results['raw_input']
     noisy = results['noisy']
     processed = results['processed']
     snr_values = results['snr_values']
@@ -244,96 +245,95 @@ def create_signal_plot(results, time_range=None):
     t_snr = np.arange(0, len(noisy) - snr_window + 1, snr_step) / results['fs']
     t_snr_center = t_snr + snr_window / (2 * results['fs'])
 
-    # Apply time range if specified
-    if time_range:
-        mask = (t >= time_range[0]) & (t <= time_range[1])
-        t_plot = t[mask]
-        noisy_plot = noisy[mask]
-        processed_plot = processed[mask]
-
-        snr_mask = (t_snr_center >= time_range[0]) & (t_snr_center <= time_range[1])
-        t_snr_plot = t_snr_center[snr_mask]
-        snr_plot = snr_values[snr_mask] if len(snr_values) > sum(snr_mask) else snr_values[:sum(snr_mask)]
-    else:
-        t_plot = t
-        noisy_plot = noisy
-        processed_plot = processed
-        t_snr_plot = t_snr_center
-        snr_plot = snr_values[:len(t_snr_center)]
-
-    # Create subplot figure
+    # Create subplot figure with 3 rows: raw input, signal comparison, SNR
     fig = make_subplots(
-        rows=2, cols=1,
-        shared_xaxes=True,
+        rows=3, cols=1,
+        shared_xaxes=False,
         vertical_spacing=0.08,
-        row_heights=[0.7, 0.3],
-        subplot_titles=["Signal Comparison", "Signal-to-Noise Ratio (SNR)"]
+        row_heights=[0.25, 0.5, 0.25],
+        subplot_titles=["Raw Input Signal", "Signal Comparison (after preprocessing)", "Signal-to-Noise Ratio (SNR)"]
     )
 
-    # Add noisy signal
+    # Row 1: Raw input signal
     fig.add_trace(
         go.Scatter(
-            x=t_plot, y=noisy_plot,
+            x=t_raw, y=raw_input,
+            mode='lines',
+            name='Raw Input',
+            line=dict(color=COLOR_RAW, width=1),
+            showlegend=True,
+        ),
+        row=1, col=1
+    )
+
+    # Row 2: Noisy (preprocessed) signal
+    fig.add_trace(
+        go.Scatter(
+            x=t, y=noisy,
             mode='lines',
             name='Original (Noisy)',
             line=dict(color=COLOR_NOISY, width=1),
         ),
-        row=1, col=1
+        row=2, col=1
     )
 
-    # Add processed signal
+    # Row 2: Processed signal
     fig.add_trace(
         go.Scatter(
-            x=t_plot, y=processed_plot,
+            x=t, y=processed,
             mode='lines',
             name='LSTM Cleaned',
             line=dict(color=COLOR_CLEAN, width=1.2),
         ),
-        row=1, col=1
+        row=2, col=1
     )
 
-    # Add SNR curve
-    if len(snr_plot) > 0 and len(t_snr_plot) == len(snr_plot):
+    # Row 3: SNR curve
+    snr_plot = snr_values[:len(t_snr_center)]
+    if len(snr_plot) > 0:
         fig.add_trace(
             go.Scatter(
-                x=t_snr_plot, y=snr_plot,
+                x=t_snr_center, y=snr_plot,
                 mode='lines',
                 name='SNR',
                 line=dict(color=COLOR_SNR, width=1.5),
             ),
-            row=2, col=1
+            row=3, col=1
         )
 
         # Add threshold line
         snr_threshold = np.mean(snr_plot) * 0.75
         fig.add_hline(
-            y=snr_threshold, row=2, col=1,
+            y=snr_threshold, row=3, col=1,
             line_dash="dash", line_color="gray",
             annotation_text=f"Threshold: {snr_threshold:.1f} dB"
         )
 
     # Update layout
     fig.update_layout(
-        height=500,
+        height=650,
         showlegend=True,
         legend=dict(
             orientation="h",
             yanchor="bottom",
             y=1.02,
-            xanchor="right",
-            x=1
+            xanchor="center",
+            x=0.5
         ),
-        margin=dict(l=60, r=20, t=60, b=40),
+        margin=dict(l=60, r=20, t=80, b=40),
     )
 
+    fig.update_xaxes(title_text="Time (s)", row=1, col=1)
     fig.update_xaxes(title_text="Time (s)", row=2, col=1)
-    fig.update_yaxes(title_text="Amplitude (a.u.)", row=1, col=1)
-    fig.update_yaxes(title_text="SNR (dB)", row=2, col=1)
+    fig.update_xaxes(title_text="Time (s)", row=3, col=1)
+    fig.update_yaxes(title_text="Intensity (a.u.)", row=1, col=1)
+    fig.update_yaxes(title_text="Amplitude (a.u.)", row=2, col=1)
+    fig.update_yaxes(title_text="SNR (dB)", row=3, col=1)
 
     return fig
 
 
-def create_pulse_plot(results, time_range=None):
+def create_pulse_plot(results):
     """Create the pulse boundaries and averaged pulse plot."""
     t = results['t']
     noisy = results['noisy']
@@ -343,55 +343,41 @@ def create_pulse_plot(results, time_range=None):
     # Create subplot with boundaries and averaged pulse
     fig = make_subplots(
         rows=1, cols=2,
-        column_widths=[0.65, 0.35],
+        column_widths=[0.6, 0.4],
         subplot_titles=["Signal with Pulse Boundaries", "Averaged Pulse Waveform"],
-        horizontal_spacing=0.1
+        horizontal_spacing=0.12
     )
-
-    # Apply time range for left plot
-    if time_range:
-        mask = (t >= time_range[0]) & (t <= time_range[1])
-        t_plot = t[mask]
-        noisy_plot = noisy[mask]
-        processed_plot = processed[mask]
-
-        # Filter valleys within range
-        valleys_in_range = [v for v in valleys if t[v] >= time_range[0] and t[v] <= time_range[1]]
-    else:
-        t_plot = t
-        noisy_plot = noisy
-        processed_plot = processed
-        valleys_in_range = valleys
 
     # Left plot: Signal with boundaries
     fig.add_trace(
         go.Scatter(
-            x=t_plot, y=noisy_plot,
+            x=t, y=noisy,
             mode='lines',
             name='Original (Noisy)',
             line=dict(color=COLOR_NOISY, width=1),
+            legendgroup='left',
         ),
         row=1, col=1
     )
 
     fig.add_trace(
         go.Scatter(
-            x=t_plot, y=processed_plot,
+            x=t, y=processed,
             mode='lines',
             name='LSTM Cleaned',
             line=dict(color=COLOR_CLEAN, width=1.2),
+            legendgroup='left',
         ),
         row=1, col=1
     )
 
-    # Add pulse boundary lines (longer on left side)
-    y_min = min(np.min(noisy_plot), np.min(processed_plot)) - 0.3
-    y_max = max(np.max(noisy_plot), np.max(processed_plot)) + 0.3
+    # Add pulse boundary lines
+    y_min = min(np.min(noisy), np.min(processed)) - 0.3
+    y_max = max(np.max(noisy), np.max(processed)) + 0.3
 
-    for i, v in enumerate(valleys_in_range):
-        # Longer line on left, shorter on right
+    for i, v in enumerate(valleys):
         y0 = y_min - 0.1 if i % 2 == 0 else y_min
-        y1 = y_max * 0.6  # Lines go up to 60% of max
+        y1 = y_max * 0.6
 
         fig.add_trace(
             go.Scatter(
@@ -419,6 +405,7 @@ def create_pulse_plot(results, time_range=None):
             mode='lines',
             name='Original Pulse',
             line=dict(color=COLOR_NOISY, width=2),
+            legendgroup='right',
         ),
         row=1, col=2
     )
@@ -428,7 +415,7 @@ def create_pulse_plot(results, time_range=None):
             x=np.concatenate([x_pulse, x_pulse[::-1]]),
             y=np.concatenate([mean_noisy - std_noisy, (mean_noisy + std_noisy)[::-1]]),
             fill='toself',
-            fillcolor=f'rgba(255, 170, 28, 0.2)',
+            fillcolor='rgba(255, 170, 28, 0.2)',
             line=dict(color='rgba(255,255,255,0)'),
             showlegend=False,
             hoverinfo='skip',
@@ -443,6 +430,7 @@ def create_pulse_plot(results, time_range=None):
             mode='lines',
             name='LSTM Pulse',
             line=dict(color=COLOR_CLEAN, width=2),
+            legendgroup='right',
         ),
         row=1, col=2
     )
@@ -452,7 +440,7 @@ def create_pulse_plot(results, time_range=None):
             x=np.concatenate([x_pulse, x_pulse[::-1]]),
             y=np.concatenate([mean_processed - std_processed, (mean_processed + std_processed)[::-1]]),
             fill='toself',
-            fillcolor=f'rgba(64, 95, 193, 0.2)',
+            fillcolor='rgba(64, 95, 193, 0.2)',
             line=dict(color='rgba(255,255,255,0)'),
             showlegend=False,
             hoverinfo='skip',
@@ -466,18 +454,19 @@ def create_pulse_plot(results, time_range=None):
     fig.add_vline(x=results['ttp_lstm'], row=1, col=2, line_dash="dash",
                   line_color=COLOR_CLEAN, line_width=1)
 
-    # Update layout
+    # Update layout with separate legends for each subplot
     fig.update_layout(
         height=400,
         showlegend=True,
         legend=dict(
             orientation="h",
             yanchor="bottom",
-            y=1.02,
-            xanchor="right",
-            x=1
+            y=1.08,
+            xanchor="center",
+            x=0.5,
+            font=dict(size=10),
         ),
-        margin=dict(l=60, r=20, t=60, b=40),
+        margin=dict(l=60, r=20, t=80, b=40),
     )
 
     fig.update_xaxes(title_text="Time (s)", row=1, col=1)
@@ -487,11 +476,6 @@ def create_pulse_plot(results, time_range=None):
     fig.update_yaxes(range=[y_min, y_max], row=1, col=1)
 
     return fig
-
-
-def export_figure_as_png(fig, filename="plot.png"):
-    """Export a Plotly figure as PNG bytes."""
-    return fig.to_image(format="png", width=1200, height=600, scale=2)
 
 
 # --- Streamlit App ---
@@ -517,11 +501,13 @@ def main():
             color: #666;
             margin-bottom: 2rem;
         }
-        .metric-box {
-            background-color: #f0f2f6;
-            padding: 1rem;
+        .data-loaded {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+            padding: 0.75rem;
             border-radius: 0.5rem;
-            text-align: center;
+            margin: 0.5rem 0;
         }
         .stButton>button {
             width: 100%;
@@ -539,6 +525,16 @@ def main():
     # Load model
     with st.spinner("Loading LSTM model..."):
         model, device = load_model()
+
+    # Initialize session state
+    if 'results' not in st.session_state:
+        st.session_state.results = None
+    if 'signal_name' not in st.session_state:
+        st.session_state.signal_name = None
+    if 'signal' not in st.session_state:
+        st.session_state.signal = None
+    if 'fs' not in st.session_state:
+        st.session_state.fs = None
 
     # Sidebar - Input Section
     with st.sidebar:
@@ -560,30 +556,49 @@ def main():
         uploaded_file = st.file_uploader(
             "Upload signal file",
             type=['mat', 'csv', 'txt'],
-            help="Supported formats: .mat (with 'signal' and 'fs' fields), .csv, .txt"
+            help="Supported formats: .mat, .csv, .txt"
         )
 
-        # Sampling frequency input
+        # Sampling frequency input (blank by default)
         fs_input = st.number_input(
             "Sampling Frequency (Hz)",
             min_value=1.0,
             max_value=10000.0,
-            value=100.0,
+            value=None,
             step=1.0,
-            help="Original sampling frequency of your signal. Required for .csv and .txt files."
+            placeholder="Enter sampling frequency",
+            help="Original sampling frequency of your signal. Required for all uploaded files."
+        )
+
+        st.divider()
+
+        # Delta OD conversion option
+        st.subheader("Signal Type")
+        convert_dod = st.checkbox(
+            "Convert to Delta OD",
+            value=True,
+            help="Convert raw intensity signal to change in optical density: ΔOD = -ln(I/I₀). Enable for raw intensity signals (NIRS, DCS). Disable if your signal is already in ΔOD or other units."
         )
 
         st.divider()
 
         # Processing parameters (advanced)
         with st.expander("Advanced Parameters"):
+            st.markdown("""
+            **Preprocessing Parameters**
+
+            These parameters control how the signal is normalized before LSTM processing.
+            The goal is to scale the signal so the **averaged pulse** ranges roughly from **-1 to 1**.
+            If your results look off, adjust these values and check the averaged pulse plot.
+            """)
+
             amplitude_scale = st.slider(
                 "Amplitude Scale",
                 min_value=0.5,
                 max_value=2.0,
                 value=0.95,
                 step=0.05,
-                help="Controls vertical scaling of the signal"
+                help="Scales the signal amplitude. Increase if pulses appear too small; decrease if clipped."
             )
             offset = st.slider(
                 "DC Offset",
@@ -591,7 +606,19 @@ def main():
                 max_value=0.5,
                 value=0.1,
                 step=0.05,
-                help="Shifts the signal center up or down"
+                help="Shifts the signal baseline. Adjust if the signal is not centered around zero."
+            )
+
+            st.markdown("---")
+            st.markdown("**Window Parameters**")
+
+            overlap_size = st.slider(
+                "Window Overlap",
+                min_value=0,
+                max_value=2900,
+                value=DEFAULT_OVERLAP_SIZE,
+                step=100,
+                help="Overlap between consecutive 3000-point LSTM windows. Higher overlap = smoother transitions but slower processing."
             )
 
         st.divider()
@@ -606,31 +633,26 @@ def main():
             st.markdown("""
             **Quick Start:**
             1. Click an example dataset button OR upload your own file
-            2. Set the sampling frequency (for uploaded files)
-            3. Click "Process Signal"
-            4. View results and download outputs
+            2. Set the sampling frequency for uploaded files
+            3. Choose whether to convert to Delta OD
+            4. Click "Process Signal"
+            5. View results and download outputs
 
             **Supported File Formats:**
-            - `.mat`: MATLAB files with 'signal' and 'fs' fields
+            - `.mat`: MATLAB files (first array found will be used)
             - `.csv`: First column or 'signal' column
             - `.txt`: Whitespace-separated values
 
             **Tips:**
-            - Signal should be a 1D time trace of optical intensity
-            - For NIRS data, the signal is automatically converted to dOD
-            - Zoom into plots using the slider below each plot
-            - Adjust amplitude scale if results don't look right
+            - Signal should be a 1D time trace
+            - Enable "Convert to Delta OD" for raw intensity signals
+            - Use zoom/pan tools on plots to explore data
+            - Check the averaged pulse ranges from -1 to 1
 
             **About the Metrics:**
             - **Pearson r**: Correlation between original and cleaned average pulse
             - **ΔTTP**: Time-to-peak difference in milliseconds
             """)
-
-    # Initialize session state
-    if 'results' not in st.session_state:
-        st.session_state.results = None
-    if 'signal_name' not in st.session_state:
-        st.session_state.signal_name = None
 
     # Handle example dataset buttons
     if use_fiber_shaking:
@@ -661,42 +683,70 @@ def main():
         file_content = uploaded_file.read()
 
         if file_ext == 'mat':
-            signal, fs = load_mat_file(file_content, uploaded_file.name)
-            if fs is None:
-                fs = fs_input
+            signal = load_mat_file(file_content, uploaded_file.name)
         elif file_ext == 'csv':
             signal = load_csv_file(file_content)
-            fs = fs_input
         elif file_ext == 'txt':
             signal = load_txt_file(file_content)
-            fs = fs_input
         else:
             st.error(f"Unsupported file format: {file_ext}")
             signal = None
-            fs = None
 
         if signal is not None:
             st.session_state.signal = signal
-            st.session_state.fs = fs
             st.session_state.signal_name = uploaded_file.name.rsplit('.', 1)[0]
             st.session_state.results = None
+            # Don't set fs here - user must input it manually
+
+    # Data loaded indicator
+    if st.session_state.signal is not None:
+        with st.sidebar:
+            st.markdown(
+                f'<div class="data-loaded">Data loaded: <strong>{st.session_state.signal_name}</strong><br>'
+                f'Length: {len(st.session_state.signal):,} samples</div>',
+                unsafe_allow_html=True
+            )
+            if st.session_state.fs is not None:
+                st.markdown(
+                    f'<div class="data-loaded">Sampling rate: <strong>{st.session_state.fs:.1f} Hz</strong></div>',
+                    unsafe_allow_html=True
+                )
 
     # Process signal
-    if process_btn and hasattr(st.session_state, 'signal'):
-        with st.spinner("Processing signal with LSTM... This may take a moment."):
-            try:
-                results = process_signal(
-                    model, device,
-                    st.session_state.signal,
-                    st.session_state.fs,
-                    amplitude_scale=amplitude_scale,
-                    offset=offset
-                )
-                st.session_state.results = results
-                st.success("Processing complete!")
-            except Exception as e:
-                st.error(f"Error processing signal: {e}")
-                st.session_state.results = None
+    if process_btn:
+        if st.session_state.signal is None:
+            st.error("Please load a dataset first (example or upload).")
+        else:
+            # Determine sampling frequency
+            if st.session_state.fs is not None:
+                # Example dataset - use stored fs
+                fs_to_use = st.session_state.fs
+            elif fs_input is not None:
+                # User uploaded file with fs specified
+                fs_to_use = fs_input
+                st.session_state.fs = fs_input
+            else:
+                # No fs specified
+                st.error("Please enter the sampling frequency for your uploaded data.")
+                fs_to_use = None
+
+            if fs_to_use is not None:
+                with st.spinner("Processing signal with LSTM... This may take a moment."):
+                    try:
+                        results = process_signal(
+                            model, device,
+                            st.session_state.signal,
+                            fs_to_use,
+                            amplitude_scale=amplitude_scale,
+                            offset=offset,
+                            overlap_size=overlap_size,
+                            convert_dod=convert_dod,
+                        )
+                        st.session_state.results = results
+                        st.success("Processing complete!")
+                    except Exception as e:
+                        st.error(f"Error processing signal: {e}")
+                        st.session_state.results = None
 
     # Display results
     if st.session_state.results is not None:
@@ -738,41 +788,14 @@ def main():
 
         # Plot 1: Signal comparison with SNR
         st.subheader("Signal Comparison")
-
-        # Time range slider for plot 1
-        t_max = results['t'][-1]
-        default_window = min(30.0, t_max)
-
-        time_range_1 = st.slider(
-            "Time Window (Plot 1)",
-            min_value=0.0,
-            max_value=float(t_max),
-            value=(0.0, default_window),
-            step=0.5,
-            format="%.1f s",
-            key="time_range_1"
-        )
-
-        fig1 = create_signal_plot(results, time_range=time_range_1)
+        fig1 = create_signal_plot(results)
         st.plotly_chart(fig1, use_container_width=True)
 
         st.divider()
 
         # Plot 2: Pulse boundaries and averaged pulse
         st.subheader("Pulse Analysis")
-
-        # Time range slider for plot 2
-        time_range_2 = st.slider(
-            "Time Window (Plot 2)",
-            min_value=0.0,
-            max_value=float(t_max),
-            value=(0.0, min(10.0, t_max)),
-            step=0.5,
-            format="%.1f s",
-            key="time_range_2"
-        )
-
-        fig2 = create_pulse_plot(results, time_range=time_range_2)
+        fig2 = create_pulse_plot(results)
         st.plotly_chart(fig2, use_container_width=True)
 
         st.divider()
@@ -784,7 +807,6 @@ def main():
         signal_name = st.session_state.signal_name or "signal"
 
         with col1:
-            # Download cleaned signal
             cleaned_df = pd.DataFrame({
                 'time_s': results['t'],
                 'original': results['noisy'],
@@ -799,7 +821,6 @@ def main():
             )
 
         with col2:
-            # Download valleys/boundaries
             valleys_df = pd.DataFrame({
                 'valley_index': results['valleys'],
                 'valley_time_s': results['t'][results['valleys']]
@@ -813,7 +834,6 @@ def main():
             )
 
         with col3:
-            # Download metrics
             metrics = {
                 'pearson_r': float(results['r_pearson']),
                 'delta_ttp_ms': float(results['delta_ttp'] * 1000),
@@ -822,6 +842,7 @@ def main():
                 'num_pulses': int(len(results['valleys'])),
                 'signal_duration_s': float(results['t'][-1]),
                 'sampling_frequency_hz': float(results['fs']),
+                'original_sampling_frequency_hz': float(results['fs_original']),
             }
             json_metrics = json.dumps(metrics, indent=2)
             st.download_button(
@@ -832,7 +853,6 @@ def main():
             )
 
         with col4:
-            # Download pulse waveform
             pulse_df = pd.DataFrame({
                 'time_s': results['x_pulse'],
                 'mean_original': results['mean_pulse_noisy'],
@@ -880,7 +900,7 @@ def main():
             ### Processing Pipeline
 
             1. **Preprocessing**
-               - Convert intensity to delta optical density (dOD)
+               - Optionally convert intensity to delta optical density (dOD)
                - Resample to 50 Hz (training frequency)
                - High-pass filter and normalize to [-1, 1]
 
