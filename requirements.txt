@@ -17,6 +17,7 @@ PyWavelets>=1.4.0
 
 # Visualization
 plotly>=5.18.0
+matplotlib>=3.7.0
 
 # For loading MATLAB files
 h5py>=3.8.0
