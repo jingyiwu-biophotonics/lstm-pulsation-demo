@@ -526,16 +526,9 @@ def perform_reset():
     st.session_state.fs = None
     st.session_state.is_example_data = False
 
-    # Delete widget-bound keys so they reinitialize with defaults on rerun
-    # (Cannot directly modify session state for keys bound to widgets)
-    widget_keys = ['param_fs_input', 'param_convert_dod', 'param_amplitude_scale',
-                   'param_offset', 'param_overlap_size']
-    for key in widget_keys:
-        if key in st.session_state:
-            del st.session_state[key]
-
-    # Clear file uploader by incrementing counter
-    st.session_state.file_uploader_key = st.session_state.get('file_uploader_key', 0) + 1
+    # Increment widget key counter to force all widgets to reinitialize with defaults
+    # This works because changing the key makes Streamlit treat it as a new widget
+    st.session_state.widget_key = st.session_state.get('widget_key', 0) + 1
 
     # Clear the reset flag
     st.session_state.pending_reset = False
@@ -545,7 +538,7 @@ def perform_reset():
 def main():
     st.set_page_config(
         page_title="LSTM Pulsation Tracing",
-        page_icon="🧠",
+        page_icon=":material/hub:",
         layout="wide",
         initial_sidebar_state="expanded"
     )
@@ -604,9 +597,12 @@ def main():
     if 'is_example_data' not in st.session_state:
         st.session_state.is_example_data = False
 
-    # Initialize file uploader key (for reset functionality)
-    if 'file_uploader_key' not in st.session_state:
-        st.session_state.file_uploader_key = 0
+    # Initialize widget key counter (for reset functionality)
+    if 'widget_key' not in st.session_state:
+        st.session_state.widget_key = 0
+
+    # Get current widget key for use in widget keys
+    wk = st.session_state.widget_key
 
     # Sidebar - Input Section
     with st.sidebar:
@@ -629,7 +625,7 @@ def main():
             "Upload signal file",
             type=['mat', 'csv', 'txt'],
             help="Supported formats: .mat, .csv, .txt",
-            key=f"file_uploader_{st.session_state.file_uploader_key}"
+            key=f"file_uploader_{wk}"
         )
 
         # Sampling frequency input (key used for reset functionality)
@@ -641,7 +637,7 @@ def main():
             step=1.0,
             placeholder="Enter sampling frequency",
             help="Original sampling frequency of your signal. Required for all uploaded files.",
-            key="param_fs_input"
+            key=f"param_fs_input_{wk}"
         )
 
         st.divider()
@@ -652,7 +648,7 @@ def main():
             "Convert to ΔOD",
             value=True,
             help="Convert raw intensity signal to change in optical density: ΔOD = -ln(I/I₀). Enable for raw intensity signals. Disable if your signal is already a \"PPG-like\" signal.",
-            key="param_convert_dod"
+            key=f"param_convert_dod_{wk}"
         )
 
         st.divider()
@@ -674,7 +670,7 @@ def main():
                 value=0.95,
                 step=0.05,
                 help="Scales the signal amplitude. Increase if pulses appear too small; decrease if clipped.",
-                key="param_amplitude_scale"
+                key=f"param_amplitude_scale_{wk}"
             )
             offset = st.slider(
                 "DC Offset",
@@ -683,7 +679,7 @@ def main():
                 value=0.1,
                 step=0.05,
                 help="Shifts the signal baseline. Adjust if the signal is not centered around zero.",
-                key="param_offset"
+                key=f"param_offset_{wk}"
             )
 
             st.markdown("---")
@@ -696,7 +692,7 @@ def main():
                 value=DEFAULT_OVERLAP_SIZE,
                 step=100,
                 help="Overlap between consecutive 3000-point LSTM windows. Higher overlap = smoother transitions but slower processing.",
-                key="param_overlap_size"
+                key=f"param_overlap_size_{wk}"
             )
 
         st.divider()
