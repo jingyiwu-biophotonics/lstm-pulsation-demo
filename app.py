@@ -482,13 +482,54 @@ def create_pulse_plot(results):
     return fig
 
 
+def create_preview_plot(signal, fs, signal_name):
+    """Create a simple preview plot of the loaded signal."""
+    # Create time axis
+    t = np.arange(len(signal)) / fs if fs else np.arange(len(signal))
+    x_label = "Time (s)" if fs else "Sample Index"
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=t, y=signal,
+            mode='lines',
+            name='Raw Signal',
+            line=dict(color=COLOR_RAW, width=1),
+        )
+    )
+
+    fig.update_layout(
+        title=f"Preview: {signal_name}",
+        height=300,
+        margin=dict(l=60, r=20, t=50, b=40),
+        showlegend=False,
+    )
+    fig.update_xaxes(title_text=x_label)
+    fig.update_yaxes(title_text="Amplitude (a.u.)")
+
+    return fig
+
+
 def reset_session_state():
-    """Reset all session state variables."""
+    """Reset all session state variables including parameter settings."""
+    # Reset data-related state
     st.session_state.results = None
     st.session_state.signal_name = None
     st.session_state.signal = None
     st.session_state.fs = None
     st.session_state.is_example_data = False
+
+    # Reset parameter settings to defaults
+    st.session_state.param_fs_input = None
+    st.session_state.param_convert_dod = True
+    st.session_state.param_amplitude_scale = 0.95
+    st.session_state.param_offset = 0.1
+    st.session_state.param_overlap_size = DEFAULT_OVERLAP_SIZE
+
+    # Clear file uploader by incrementing counter
+    if 'file_uploader_key' not in st.session_state:
+        st.session_state.file_uploader_key = 0
+    st.session_state.file_uploader_key += 1
 
 
 # --- Streamlit App ---
@@ -551,6 +592,20 @@ def main():
     if 'is_example_data' not in st.session_state:
         st.session_state.is_example_data = False
 
+    # Initialize parameter session state (for reset functionality)
+    if 'param_fs_input' not in st.session_state:
+        st.session_state.param_fs_input = None
+    if 'param_convert_dod' not in st.session_state:
+        st.session_state.param_convert_dod = True
+    if 'param_amplitude_scale' not in st.session_state:
+        st.session_state.param_amplitude_scale = 0.95
+    if 'param_offset' not in st.session_state:
+        st.session_state.param_offset = 0.1
+    if 'param_overlap_size' not in st.session_state:
+        st.session_state.param_overlap_size = DEFAULT_OVERLAP_SIZE
+    if 'file_uploader_key' not in st.session_state:
+        st.session_state.file_uploader_key = 0
+
     # Sidebar - Input Section
     with st.sidebar:
         st.header("Input Data")
@@ -571,18 +626,20 @@ def main():
         uploaded_file = st.file_uploader(
             "Upload signal file",
             type=['mat', 'csv', 'txt'],
-            help="Supported formats: .mat, .csv, .txt"
+            help="Supported formats: .mat, .csv, .txt",
+            key=f"file_uploader_{st.session_state.file_uploader_key}"
         )
 
-        # Sampling frequency input (blank by default)
+        # Sampling frequency input (uses session state for reset)
         fs_input = st.number_input(
             "Sampling Frequency (Hz)",
             min_value=1.0,
             max_value=10000.0,
-            value=None,
+            value=st.session_state.param_fs_input,
             step=1.0,
             placeholder="Enter sampling frequency",
-            help="Original sampling frequency of your signal. Required for all uploaded files."
+            help="Original sampling frequency of your signal. Required for all uploaded files.",
+            key="param_fs_input"
         )
 
         st.divider()
@@ -591,8 +648,9 @@ def main():
         st.subheader("Signal Type")
         convert_dod = st.checkbox(
             "Convert to ΔOD",
-            value=True,
-            help="Convert raw intensity signal to change in optical density: ΔOD = -ln(I/I₀). Enable for raw intensity signals. Disable if your signal is already a \"PPG-like\" signal."
+            value=st.session_state.param_convert_dod,
+            help="Convert raw intensity signal to change in optical density: ΔOD = -ln(I/I₀). Enable for raw intensity signals. Disable if your signal is already a \"PPG-like\" signal.",
+            key="param_convert_dod"
         )
 
         st.divider()
@@ -611,17 +669,19 @@ def main():
                 "Amplitude Scale",
                 min_value=0.5,
                 max_value=2.0,
-                value=0.95,
+                value=st.session_state.param_amplitude_scale,
                 step=0.05,
-                help="Scales the signal amplitude. Increase if pulses appear too small; decrease if clipped."
+                help="Scales the signal amplitude. Increase if pulses appear too small; decrease if clipped.",
+                key="param_amplitude_scale"
             )
             offset = st.slider(
                 "DC Offset",
                 min_value=-0.5,
                 max_value=0.5,
-                value=0.1,
+                value=st.session_state.param_offset,
                 step=0.05,
-                help="Shifts the signal baseline. Adjust if the signal is not centered around zero."
+                help="Shifts the signal baseline. Adjust if the signal is not centered around zero.",
+                key="param_offset"
             )
 
             st.markdown("---")
@@ -631,9 +691,10 @@ def main():
                 "Window Overlap",
                 min_value=0,
                 max_value=2900,
-                value=DEFAULT_OVERLAP_SIZE,
+                value=st.session_state.param_overlap_size,
                 step=100,
-                help="Overlap between consecutive 3000-point LSTM windows. Higher overlap = smoother transitions but slower processing."
+                help="Overlap between consecutive 3000-point LSTM windows. Higher overlap = smoother transitions but slower processing.",
+                key="param_overlap_size"
             )
 
         st.divider()
@@ -759,8 +820,40 @@ def main():
                         st.error(f"Error processing signal: {e}")
                         st.session_state.results = None
 
+    # Display dataset preview when data is loaded but not yet processed
+    if st.session_state.signal is not None and st.session_state.results is None:
+        st.subheader("Dataset Preview")
+
+        # Show dataset info
+        signal = st.session_state.signal
+        fs = st.session_state.fs
+        signal_name = st.session_state.signal_name or "Uploaded Data"
+
+        # Calculate basic stats
+        duration_str = f"{len(signal) / fs:.2f} s" if fs else "N/A (set sampling frequency)"
+
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Dataset", signal_name)
+        with col2:
+            st.metric("Samples", f"{len(signal):,}")
+        with col3:
+            st.metric("Sampling Rate", f"{fs:.1f} Hz" if fs else "Not set")
+        with col4:
+            st.metric("Duration", duration_str)
+
+        # Show preview plot
+        preview_fig = create_preview_plot(signal, fs, signal_name)
+        st.plotly_chart(preview_fig, use_container_width=True)
+
+        # Remind user to process
+        if st.session_state.is_example_data or fs_input is not None:
+            st.info("Dataset loaded. Click **Process Signal** in the sidebar to analyze.")
+        else:
+            st.warning("Dataset loaded. Please enter the **Sampling Frequency** in the sidebar, then click **Process Signal**.")
+
     # Display results
-    if st.session_state.results is not None:
+    elif st.session_state.results is not None:
         results = st.session_state.results
 
         # Data loaded indicator and success message in main area
