@@ -519,12 +519,13 @@ def reset_session_state():
     st.session_state.fs = None
     st.session_state.is_example_data = False
 
-    # Reset parameter settings to defaults
-    st.session_state.param_fs_input = None
-    st.session_state.param_convert_dod = True
-    st.session_state.param_amplitude_scale = 0.95
-    st.session_state.param_offset = 0.1
-    st.session_state.param_overlap_size = DEFAULT_OVERLAP_SIZE
+    # Delete widget-bound keys so they reinitialize with defaults on rerun
+    # (Cannot directly modify session state for keys bound to widgets)
+    widget_keys = ['param_fs_input', 'param_convert_dod', 'param_amplitude_scale',
+                   'param_offset', 'param_overlap_size']
+    for key in widget_keys:
+        if key in st.session_state:
+            del st.session_state[key]
 
     # Clear file uploader by incrementing counter
     if 'file_uploader_key' not in st.session_state:
@@ -592,17 +593,7 @@ def main():
     if 'is_example_data' not in st.session_state:
         st.session_state.is_example_data = False
 
-    # Initialize parameter session state (for reset functionality)
-    if 'param_fs_input' not in st.session_state:
-        st.session_state.param_fs_input = None
-    if 'param_convert_dod' not in st.session_state:
-        st.session_state.param_convert_dod = True
-    if 'param_amplitude_scale' not in st.session_state:
-        st.session_state.param_amplitude_scale = 0.95
-    if 'param_offset' not in st.session_state:
-        st.session_state.param_offset = 0.1
-    if 'param_overlap_size' not in st.session_state:
-        st.session_state.param_overlap_size = DEFAULT_OVERLAP_SIZE
+    # Initialize file uploader key (for reset functionality)
     if 'file_uploader_key' not in st.session_state:
         st.session_state.file_uploader_key = 0
 
@@ -630,12 +621,12 @@ def main():
             key=f"file_uploader_{st.session_state.file_uploader_key}"
         )
 
-        # Sampling frequency input (uses session state for reset)
+        # Sampling frequency input (key used for reset functionality)
         fs_input = st.number_input(
             "Sampling Frequency (Hz)",
             min_value=1.0,
             max_value=10000.0,
-            value=st.session_state.param_fs_input,
+            value=None,
             step=1.0,
             placeholder="Enter sampling frequency",
             help="Original sampling frequency of your signal. Required for all uploaded files.",
@@ -648,7 +639,7 @@ def main():
         st.subheader("Signal Type")
         convert_dod = st.checkbox(
             "Convert to ΔOD",
-            value=st.session_state.param_convert_dod,
+            value=True,
             help="Convert raw intensity signal to change in optical density: ΔOD = -ln(I/I₀). Enable for raw intensity signals. Disable if your signal is already a \"PPG-like\" signal.",
             key="param_convert_dod"
         )
@@ -669,7 +660,7 @@ def main():
                 "Amplitude Scale",
                 min_value=0.5,
                 max_value=2.0,
-                value=st.session_state.param_amplitude_scale,
+                value=0.95,
                 step=0.05,
                 help="Scales the signal amplitude. Increase if pulses appear too small; decrease if clipped.",
                 key="param_amplitude_scale"
@@ -678,7 +669,7 @@ def main():
                 "DC Offset",
                 min_value=-0.5,
                 max_value=0.5,
-                value=st.session_state.param_offset,
+                value=0.1,
                 step=0.05,
                 help="Shifts the signal baseline. Adjust if the signal is not centered around zero.",
                 key="param_offset"
@@ -691,7 +682,7 @@ def main():
                 "Window Overlap",
                 min_value=0,
                 max_value=2900,
-                value=st.session_state.param_overlap_size,
+                value=DEFAULT_OVERLAP_SIZE,
                 step=100,
                 help="Overlap between consecutive 3000-point LSTM windows. Higher overlap = smoother transitions but slower processing.",
                 key="param_overlap_size"
