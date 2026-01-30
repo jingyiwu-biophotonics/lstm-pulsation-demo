@@ -10,6 +10,7 @@ Author: Jingyi Wu (jingyiwu@andrew.cmu.edu)
 import os
 import io
 import json
+import time
 import numpy as np
 import pandas as pd
 import torch
@@ -512,6 +513,12 @@ def create_preview_plot(signal, fs, signal_name):
 
 def reset_session_state():
     """Reset all session state variables including parameter settings."""
+    # Set flag to trigger reset on next rerun (before widgets are rendered)
+    st.session_state.pending_reset = True
+
+
+def perform_reset():
+    """Actually perform the reset - called before widgets are rendered."""
     # Reset data-related state
     st.session_state.results = None
     st.session_state.signal_name = None
@@ -528,19 +535,24 @@ def reset_session_state():
             del st.session_state[key]
 
     # Clear file uploader by incrementing counter
-    if 'file_uploader_key' not in st.session_state:
-        st.session_state.file_uploader_key = 0
-    st.session_state.file_uploader_key += 1
+    st.session_state.file_uploader_key = st.session_state.get('file_uploader_key', 0) + 1
+
+    # Clear the reset flag
+    st.session_state.pending_reset = False
 
 
 # --- Streamlit App ---
 def main():
     st.set_page_config(
         page_title="LSTM Pulsation Tracing",
-        page_icon="💓",
+        page_icon="🧠",
         layout="wide",
         initial_sidebar_state="expanded"
     )
+
+    # Check for pending reset BEFORE widgets are rendered
+    if st.session_state.get('pending_reset', False):
+        perform_reset()
 
     # Custom CSS for better styling
     st.markdown("""
@@ -578,8 +590,7 @@ def main():
     )
 
     # Load model
-    with st.spinner("Loading LSTM model..."):
-        model, device = load_model()
+    model, device = load_model()
 
     # Initialize session state
     if 'results' not in st.session_state:
@@ -795,21 +806,114 @@ def main():
                 fs_to_use = None
 
             if fs_to_use is not None:
-                with st.spinner("Processing signal with LSTM... This may take a moment."):
-                    try:
-                        results = process_signal(
-                            model, device,
-                            st.session_state.signal,
-                            fs_to_use,
-                            amplitude_scale=amplitude_scale,
-                            offset=offset,
-                            overlap_size=overlap_size,
-                            convert_dod=convert_dod,
+                try:
+                    # Use status container to show progress
+                    with st.status("Processing signal...", expanded=True) as status:
+                        # Step 1: Preprocessing
+                        st.write("Preprocessing signal...")
+                        preprocess_start = time.time()
+
+                        # Prepare signal
+                        raw_signal = st.session_state.signal
+                        if raw_signal.ndim == 1:
+                            raw_signal = raw_signal.reshape(1, -1)
+                        elif raw_signal.shape[0] != 1:
+                            raw_signal = raw_signal.T
+
+                        raw_signal_original = raw_signal.copy()
+
+                        if convert_dod:
+                            time_trace_raw = convert_to_dod(raw_signal)
+                        else:
+                            time_trace_raw = raw_signal.copy()
+
+                        t_target, time_trace, signal_scale = preprocess_signal(
+                            time_trace_raw, fs_to_use, FS_TARGET,
+                            amplitude_scale=amplitude_scale, offset=offset, plt_fig=False
                         )
+                        t_raw = np.arange(raw_signal_original.shape[1]) / fs_to_use
+
+                        preprocess_time = time.time() - preprocess_start
+                        st.write(f"Preprocessing complete ({preprocess_time:.2f}s)")
+
+                        # Step 2: LSTM inference
+                        st.write("Running LSTM inference...")
+                        lstm_start = time.time()
+
+                        segments = segment_time_trace(time_trace, WINDOW_SIZE, overlap_size)
+                        processed_segments = process_segments_with_lstm(model, segments, device)
+                        processed_time_trace = combine_processed_segments(
+                            processed_segments, WINDOW_SIZE, overlap_size, time_trace.shape[1]
+                        )
+
+                        lstm_time = time.time() - lstm_start
+                        st.write(f"LSTM inference complete ({lstm_time:.2f}s)")
+
+                        # Step 3: Pulse analysis
+                        st.write("Analyzing pulses...")
+                        analysis_start = time.time()
+
+                        _, valleys = find_peaks_and_valleys(
+                            processed_time_trace.squeeze(), prominence=0.25, distance=FS_TARGET / 2
+                        )
+                        segmented_pulses_noisy = segment_pulses(time_trace.squeeze(), valleys)
+                        segmented_pulses_processed = segment_pulses(processed_time_trace.squeeze(), valleys)
+
+                        filtered_pulses_noisy, _ = z_score_filter(segmented_pulses_noisy, z_threshold=2)
+                        filtered_pulses_processed, _ = z_score_filter(segmented_pulses_processed, z_threshold=2)
+
+                        if len(filtered_pulses_noisy) > 0:
+                            mean_pulse_noisy, std_pulse_noisy = calculate_weighted_mean_std(filtered_pulses_noisy)
+                            mean_pulse_processed, std_pulse_processed = calculate_weighted_mean_std(filtered_pulses_processed)
+                        else:
+                            mean_pulse_noisy, std_pulse_noisy = calculate_weighted_mean_std(segmented_pulses_noisy)
+                            mean_pulse_processed, std_pulse_processed = calculate_weighted_mean_std(segmented_pulses_processed)
+
+                        x_pulse = np.arange(len(mean_pulse_noisy)) / FS_TARGET
+                        pulse_raw = np.asarray(mean_pulse_noisy).ravel()
+                        pulse_lstm = np.asarray(mean_pulse_processed).ravel()
+                        r_pearson = np.corrcoef(pulse_raw, pulse_lstm)[0, 1]
+                        ttp_raw = x_pulse[np.argmax(pulse_raw)]
+                        ttp_lstm = x_pulse[np.argmax(pulse_lstm)]
+                        delta_ttp = abs(ttp_lstm - ttp_raw)
+
+                        snr_values = calculate_snr_windowed(
+                            time_trace.squeeze(), processed_time_trace.squeeze(),
+                            window_size=50, step_size=25
+                        )
+
+                        analysis_time = time.time() - analysis_start
+                        st.write(f"Pulse analysis complete ({analysis_time:.2f}s)")
+
+                        # Compile results
+                        results = {
+                            't': t_target,
+                            't_raw': t_raw,
+                            'raw_input': raw_signal_original.squeeze(),
+                            'noisy': time_trace.squeeze(),
+                            'processed': processed_time_trace.squeeze(),
+                            'valleys': valleys,
+                            'x_pulse': x_pulse,
+                            'mean_pulse_noisy': mean_pulse_noisy,
+                            'std_pulse_noisy': std_pulse_noisy,
+                            'mean_pulse_processed': mean_pulse_processed,
+                            'std_pulse_processed': std_pulse_processed,
+                            'ttp_raw': ttp_raw,
+                            'ttp_lstm': ttp_lstm,
+                            'r_pearson': r_pearson,
+                            'delta_ttp': delta_ttp,
+                            'snr_values': snr_values,
+                            'fs': FS_TARGET,
+                            'fs_original': fs_to_use,
+                        }
                         st.session_state.results = results
-                    except Exception as e:
-                        st.error(f"Error processing signal: {e}")
-                        st.session_state.results = None
+
+                        total_time = preprocess_time + lstm_time + analysis_time
+                        status.update(label=f"Processing complete! (Total: {total_time:.2f}s)", state="complete", expanded=False)
+
+                except Exception as e:
+                    st.error(f"Error processing signal: {e}")
+                    st.session_state.results = None
 
     # Display dataset preview when data is loaded but not yet processed
     if st.session_state.signal is not None and st.session_state.results is None:
@@ -891,15 +995,17 @@ def main():
 
         # Plot 1: Signal comparison with SNR
         st.subheader("Signal Comparison")
-        fig1 = create_signal_plot(results)
-        st.plotly_chart(fig1, use_container_width=True)
+        with st.spinner("Rendering signal comparison plot..."):
+            fig1 = create_signal_plot(results)
+            st.plotly_chart(fig1, use_container_width=True)
 
         st.divider()
 
         # Plot 2: Pulse boundaries and averaged pulse
         st.subheader("Pulse Analysis")
-        fig2 = create_pulse_plot(results)
-        st.plotly_chart(fig2, use_container_width=True)
+        with st.spinner("Rendering pulse analysis plot..."):
+            fig2 = create_pulse_plot(results)
+            st.plotly_chart(fig2, use_container_width=True)
 
         st.divider()
 
