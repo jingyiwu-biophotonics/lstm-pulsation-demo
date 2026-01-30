@@ -170,7 +170,7 @@ def process_signal(model, device, raw_signal, fs_data, amplitude_scale=0.95, off
 
     # Find pulse valleys on processed trace
     _, valleys = find_peaks_and_valleys(
-        processed_time_trace.squeeze(), prominence=0.25, distance=FS_TARGET / 2
+        processed_time_trace.squeeze(), prominence=0.25, distance=FS_TARGET / 4
     )
 
     # Segment pulses from both noisy and processed traces
@@ -578,7 +578,7 @@ def main():
     # Header
     st.markdown('<p class="main-header">LSTM Pulsation Tracing</p>', unsafe_allow_html=True)
     st.markdown(
-        '<p class="sub-header">Clean noisy optical signals (NIRS, PPG, DCS) to trace cardiac pulsations using a trained LSTM model.</p>',
+        '<p class="sub-header"> Basic demo accompanying the repository <a href="https://github.com/jingyiwu-biophotonics/lstm-pulsation-tracing">lstm-pulsation-tracing</a>. Clean noisy optical signals (NIRS, PPG, DCS) to trace cardiac pulsations using a trained LSTM model.</p>',
         unsafe_allow_html=True
     )
 
@@ -665,17 +665,17 @@ def main():
 
             amplitude_scale = st.slider(
                 "Amplitude Scale",
-                min_value=0.5,
-                max_value=2.0,
+                min_value=0.1,
+                max_value=5.0,
                 value=0.95,
                 step=0.05,
-                help="Scales the signal amplitude. Increase if pulses appear too small; decrease if clipped.",
+                help="Scales the signal amplitude. Decrease if pulses appear too small; increase if clipped.",
                 key=f"param_amplitude_scale_{wk}"
             )
             offset = st.slider(
                 "DC Offset",
-                min_value=-0.5,
-                max_value=0.5,
+                min_value=-3.0,
+                max_value=3.0,
                 value=0.1,
                 step=0.05,
                 help="Shifts the signal baseline. Adjust if the signal is not centered around zero.",
@@ -1087,10 +1087,11 @@ def main():
             This application uses a trained LSTM (Long Short-Term Memory) neural network to clean
             noisy optical signals for cardiac pulsation tracing.
 
-            **Supported Signal Types:**
+            **Supported Signal Types (not limited to):**
             - Near-Infrared Spectroscopy (NIRS)
             - Photoplethysmography (PPG)
             - Diffuse Correlation Spectroscopy (DCS)
+            - Blood pressure waveforms
 
             **Key Features:**
             - Automatic signal preprocessing and normalization
@@ -1125,7 +1126,7 @@ def main():
     st.divider()
     st.markdown("""
     <div style="text-align: center; color: #888; font-size: 0.9rem;">
-    LSTM Pulsation Tracing | Based on research by Jingyi Wu et al. |
+    LSTM Pulsation Tracing | Based on <a href="https://doi.org/10.1364/BOE.574286">Research</a> by Jingyi Wu et al. |
     <a href="mailto:jingyiwu@andrew.cmu.edu">Contact</a>
     </div>
     """, unsafe_allow_html=True)
