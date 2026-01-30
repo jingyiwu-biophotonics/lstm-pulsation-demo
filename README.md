@@ -1,6 +1,6 @@
 # LSTM Pulsation Tracing - Web Demo
 
-A Streamlit web application for cleaning noisy optical signals (NIRS, PPG, DCS) to trace cardiac pulsations using a trained LSTM model.
+A Streamlit web application for cleaning noisy optical signals (NIRS, PPG, DCS) to trace cardiac pulsations using a trained LSTM model. https://lstm-pulsation-demo.streamlit.app/
 
 ![Python](https://img.shields.io/badge/python-3.9+-blue.svg)
 ![Streamlit](https://img.shields.io/badge/streamlit-1.28+-red.svg)
